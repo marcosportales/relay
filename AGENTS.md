@@ -16,3 +16,10 @@ needed) from `lib/schema.ts` and import it. When a consumer needs only some
 columns, narrow with `Pick<Row, ...>` / `Omit<Row, ...>` rather than redeclaring a
 literal type. Don't add an insert type where `db.insert(...).values()` already
 enforces the shape.
+
+# JSX text escaping
+
+Escape apostrophes and quotes in JSX text content — raw `'` and `"` trip the
+`react/no-unescaped-entities` lint rule. Use `&apos;` for apostrophes and
+`&quot;` for quotes (e.g. `you&apos;re`, `doesn&apos;t`). This applies only to
+literal text between JSX tags, not to string attribute values or JS strings.
