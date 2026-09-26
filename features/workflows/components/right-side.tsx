@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ResizablePanel } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 import {
@@ -84,25 +85,32 @@ function Section({
 // Editor tab — edits the fields of the selected node.
 // ---------------------------------------------------------------------------
 
-// A single editor field for a node property.
-function FieldInput({
-  field,
-  value,
-  onChange,
-}: {
+interface FieldProps {
   field: NodeField
   value: string
   onChange: (value: string) => void
-}) {
-  // TODO: support a multiline field variant (textarea).
-  return (
-    <Input
-      id={field.key}
-      value={value}
-      placeholder={field.placeholder}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  )
+}
+
+// A single editor field for a node property: a textarea when the field is
+// multiline, otherwise a single-line input.
+function Field({ field, value, onChange }: FieldProps) {
+  const props = {
+    id: field.key,
+    value,
+    placeholder: field.placeholder,
+  }
+
+  if (field.multiline) {
+    return (
+      <Textarea
+        {...props}
+        className="min-h-24"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    )
+  }
+
+  return <Input {...props} onChange={(e) => onChange(e.target.value)} />
 }
 
 // The Editor tab: one input per field on the selected node, or an empty state.
@@ -130,8 +138,9 @@ function Inspector({ node }: { node: StepNodeType | undefined }) {
             <div key={field.key} className="flex flex-col gap-1.5">
               <Label htmlFor={field.key} className="text-xs">
                 {field.label}
+                {field.required && <span className="text-destructive">*</span>}
               </Label>
-              <FieldInput
+              <Field
                 field={field}
                 value={values[field.key] ?? ""}
                 onChange={(value) => {
@@ -299,11 +308,12 @@ function RunButton() {
 export function RightSide() {
   const [tab, setTab] = useState("toolbar")
 
-  // TODO: read the currently selected node from React Flow.
   const selected = useStore((s) => s.nodes.find((n) => n.selected)) as
     StepNodeType | undefined
 
-  // TODO: auto-switch to the Editor tab when the selection changes.
+  const [prevSelectedId, setPrevSelectedId] = useState(selected?.id)
+
+  if (selected && selected.id !== prevSelectedId) setPrevSelectedId(selected.id)
 
   return (
     <ResizablePanel
