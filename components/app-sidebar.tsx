@@ -13,9 +13,7 @@ import {
 import { WorkflowNav } from "@/features/workflows/components/workflow-nav"
 import { listWorkflows } from "@/features/workflows/data"
 
-export async function AppSidebar(
-  props: React.ComponentProps<typeof Sidebar>
-) {
+export async function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { orgId } = await auth()
   const workflows = orgId ? await listWorkflows(orgId) : []
 
@@ -23,6 +21,9 @@ export async function AppSidebar(
     <Sidebar variant="inset" collapsible="icon" {...props}>
       <SidebarHeader className="flex-row items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col">
         <OrganizationSwitcher
+          afterCreateOrganizationUrl="/"
+          afterSelectOrganizationUrl="/"
+          afterLeaveOrganizationUrl="/"
           hidePersonal
           appearance={{
             elements: {
