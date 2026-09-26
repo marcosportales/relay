@@ -3,6 +3,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { RightSide } from "@/features/workflows/components/right-side"
 
 interface WorkflowShellProps {
   workflowId: string
@@ -32,9 +33,7 @@ export function WorkflowShell({ workflowId }: WorkflowShellProps) {
       </ResizablePanel>
       <ResizableHandle />
       <ResizablePanel defaultSize="16rem" minSize="14rem" maxSize="36rem">
-        <div className="flex size-full items-center justify-center">
-          <span className="text-sm text-muted-foreground">Inspector</span>
-        </div>
+        <RightSide />
       </ResizablePanel>
     </ResizablePanelGroup>
   )
