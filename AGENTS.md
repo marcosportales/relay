@@ -23,3 +23,21 @@ Escape apostrophes and quotes in JSX text content — raw `'` and `"` trip the
 `react/no-unescaped-entities` lint rule. Use `&apos;` for apostrophes and
 `&quot;` for quotes (e.g. `you&apos;re`, `doesn&apos;t`). This applies only to
 literal text between JSX tags, not to string attribute values or JS strings.
+
+# Component props
+
+When a component receives props, always declare an interface named after the
+component plus `Props` (e.g. `WorkflowShell` → `WorkflowShellProps`), define
+every prop inside it, and use that interface to type the component's props.
+Never type props inline or with an anonymous object literal.
+
+```tsx
+interface WorkflowShellProps {
+  title: string
+  children: React.ReactNode
+}
+
+export function WorkflowShell({ title, children }: WorkflowShellProps) {
+  // ...
+}
+```
