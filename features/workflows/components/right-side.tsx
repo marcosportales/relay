@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { MoreHorizontal, Play, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
 import { toast } from "sonner"
@@ -21,10 +22,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ResizablePanel } from "@/components/ui/resizable"
+import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
+import { deleteWorkflowAction } from "@/features/workflows/lib/actions"
 import {
   nodeRegistry,
   type NodeDefinition,
@@ -260,8 +263,15 @@ function Palette() {
 // Header — workflow-level actions shown above the tabs.
 // ---------------------------------------------------------------------------
 
+interface ActionsMenuProps {
+  workflowId: string
+}
+
 // The "..." menu for workflow-level actions.
-function ActionsMenu() {
+function ActionsMenu({ workflowId }: ActionsMenuProps) {
+  const [isDeleting, startDeleting] = useTransition()
+  const router = useRouter()
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -273,12 +283,25 @@ function ActionsMenu() {
         <DropdownMenuItem
           variant="destructive"
           className="text-xs [&_svg:not([class*='size-'])]:size-3.5"
-          onSelect={() => {
-            // TODO: delete the workflow, then navigate away.
+          disabled={isDeleting}
+          onSelect={(e) => {
+            // Keep the menu open so the disabled state stays visible.
+            e.preventDefault()
+            startDeleting(async () => {
+              const result = await deleteWorkflowAction(workflowId)
+
+              if (!result.ok) {
+                toast.error(result.error)
+                return
+              }
+
+              toast.success("Workflow deleted")
+              router.push("/")
+            })
           }}
         >
-          <Trash2 />
-          Delete workflow
+          {isDeleting ? <Spinner /> : <Trash2 />}
+          {isDeleting ? "Deleting workflow..." : "Delete workflow"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -305,7 +328,11 @@ function RunButton() {
 // The sidebar itself — header on top, then the Toolbar / Editor tabs.
 // ---------------------------------------------------------------------------
 
-export function RightSide() {
+interface RightSideProps {
+  workflowId: string
+}
+
+export function RightSide({ workflowId }: RightSideProps) {
   const [tab, setTab] = useState("toolbar")
 
   const selected = useStore((s) => s.nodes.find((n) => n.selected)) as
@@ -325,7 +352,7 @@ export function RightSide() {
     >
       <Tabs value={tab} onValueChange={setTab} className="size-full gap-0">
         <div className="flex items-center justify-between border-b border-border p-2">
-          <ActionsMenu />
+          <ActionsMenu workflowId={workflowId} />
           <RunButton />
         </div>
         <TabsList className="m-2 w-fit bg-background">

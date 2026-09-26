@@ -2,8 +2,9 @@
 
 import { PlusIcon, WorkflowIcon } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTransition } from "react"
+import { toast } from "sonner"
 
 import {
   Popover,
@@ -33,10 +34,19 @@ export function WorkflowNav({ workflows }: WorkflowNavProps) {
   const { state, isMobile } = useSidebar()
   const [isPending, startTransition] = useTransition()
   const pathname = usePathname()
+  const router = useRouter()
 
   const handleCreateWorkflow = () => {
     startTransition(async () => {
-      await createWorkflowAction(generateSlug())
+      const result = await createWorkflowAction(generateSlug())
+
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success("Workflow created")
+      router.push(`/workflows/${result.data.id}`)
     })
   }
 

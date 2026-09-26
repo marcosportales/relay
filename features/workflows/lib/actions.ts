@@ -3,22 +3,61 @@
 import { auth } from "@clerk/nextjs/server"
 import { tasks } from "@trigger.dev/sdk"
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 
-import { createWorkflow } from "@/features/workflows/data"
+import { LiveblocksError } from "@liveblocks/node"
+
+import { createWorkflow, deleteWorkflow } from "@/features/workflows/data"
+import { liveblocks } from "@/lib/liveblocks"
 import type { helloWorldTask } from "@/trigger/example"
 
-export const createWorkflowAction = async (name: string) => {
+// Expected failures are returned as values: errors thrown from server actions
+// have their message redacted in production.
+type ActionResult<T = void> =
+  | { ok: true; data: T }
+  | { ok: false; error: string }
+
+export const createWorkflowAction = async (
+  name: string
+): Promise<ActionResult<{ id: string }>> => {
   const { orgId } = await auth()
 
   if (!orgId) {
-    throw new Error("No active organization")
+    return { ok: false, error: "No active organization" }
   }
 
   const workflow = await createWorkflow(orgId, name)
 
   revalidatePath("/workflows", "layout")
-  redirect(`/workflows/${workflow.id}`)
+  return { ok: true, data: { id: workflow.id } }
+}
+
+export const deleteWorkflowAction = async (
+  id: string
+): Promise<ActionResult> => {
+  const { orgId } = await auth()
+
+  if (!orgId) {
+    return { ok: false, error: "No active organization" }
+  }
+
+  const workflow = await deleteWorkflow(orgId, id)
+
+  if (!workflow) {
+    return { ok: false, error: "Workflow not found" }
+  }
+
+  // The room id is the workflow id. A missing room (404) is already clean; any
+  // other failure is logged so the delete still completes for the user.
+  try {
+    await liveblocks.deleteRoom(workflow.id)
+  } catch (error) {
+    if (!(error instanceof LiveblocksError && error.status === 404)) {
+      console.error(`Failed to delete Liveblocks room ${workflow.id}`, error)
+    }
+  }
+
+  revalidatePath("/workflows", "layout")
+  return { ok: true, data: undefined }
 }
 
 export const runWorkflowAction = async () => {
