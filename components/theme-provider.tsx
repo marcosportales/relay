@@ -47,11 +47,12 @@ function ThemeHotkey() {
         return
       }
 
-      if (event.key.toLowerCase() !== "d") {
+      if (isTypingTarget(event.target)) {
         return
       }
 
-      if (isTypingTarget(event.target)) {
+      // Browser autofill dispatches keydown events without a `key`
+      if (typeof event.key !== "string" || event.key.toLowerCase() !== "d") {
         return
       }
 
