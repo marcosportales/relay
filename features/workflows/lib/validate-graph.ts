@@ -7,7 +7,7 @@ export function validateGraph({ nodes, edges }: WorkflowGraph): string[] {
   const triggers = nodes.filter((node) => node.data.kind === "trigger").length
   if (triggers !== 1) {
     problems.push(
-      `A workflow needs exactly one Start trigger (found ${triggers}`
+      `A workflow needs exactly 1 Start trigger (found ${triggers})`
     )
   }
 
