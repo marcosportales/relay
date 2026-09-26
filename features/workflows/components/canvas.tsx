@@ -11,21 +11,29 @@ import {
   type ColorMode,
   type Connection,
   type Edge,
-  type Node,
+  type NodeTypes,
 } from "@xyflow/react"
-import { useTheme } from "next-themes"
 
+import { StepNode } from "./step-node"
+import type { StepNodeType } from "@/features/workflows/nodes/node-registry"
+
+import { useTheme } from "next-themes"
 import "@xyflow/react/dist/style.css"
 
-const initialNodes: Node[] = [
-  { id: "1", position: { x: 0, y: 0 }, data: { label: "Trigger" } },
-  { id: "2", position: { x: 0, y: 120 }, data: { label: "Action" } },
+const nodeTypes: NodeTypes = { step: StepNode }
+
+const initialNodes: StepNodeType[] = [
+  {
+    id: "start",
+    type: "step",
+    position: { x: 0, y: 0 },
+    data: { type: "start", kind: "trigger", title: "Start", values: {} },
+  },
 ]
 
-const initialEdges: Edge[] = [{ id: "1-2", source: "1", target: "2" }]
+const initialEdges: Edge[] = []
 
 const subscribe = () => () => {}
-
 // false on the server and during hydration, true after mount
 function useMounted() {
   return useSyncExternalStore(
@@ -54,6 +62,7 @@ export function Canvas() {
   return (
     <div className="size-full">
       <ReactFlow
+        nodeTypes={nodeTypes}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}

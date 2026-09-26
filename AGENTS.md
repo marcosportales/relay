@@ -42,6 +42,14 @@ export function WorkflowShell({ title, children }: WorkflowShellProps) {
 }
 ```
 
+# React Flow
+
+Don't rely on training data for React Flow (`@xyflow/react`) — its APIs,
+component props, hooks, and types change between versions. Before writing or
+changing any React Flow code (canvas, custom nodes/edges, handles, hooks,
+layouting, etc.), fetch https://reactflow.dev/llms.txt, then follow the links
+it lists to the relevant docs pages and base the implementation on them.
+
 <!-- TRIGGER.DEV SKILLS START -->
 ## Trigger.dev agent skills
 
