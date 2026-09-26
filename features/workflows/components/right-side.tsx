@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-import { deleteWorkflowAction } from "@/features/workflows/lib/actions"
+import { deleteWorkflowAction } from "@/features/workflows/actions"
 import {
   nodeRegistry,
   type NodeDefinition,

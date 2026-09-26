@@ -1,20 +1,24 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
-import { tasks } from "@trigger.dev/sdk"
+import { runs, tasks } from "@trigger.dev/sdk"
 import { revalidatePath } from "next/cache"
 
 import { LiveblocksError } from "@liveblocks/node"
 
-import { createWorkflow, deleteWorkflow } from "@/features/workflows/data"
+import {
+  createWorkflow,
+  deleteWorkflow,
+  saveWorkflowGraph,
+} from "@/features/workflows/data"
 import { liveblocks } from "@/lib/liveblocks"
 import type { helloWorldTask } from "@/trigger/example"
+import type { WorkflowGraph } from "@/lib/db/schema"
 
 // Expected failures are returned as values: errors thrown from server actions
 // have their message redacted in production.
 type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string }
+  { ok: true; data: T } | { ok: false; error: string }
 
 export const createWorkflowAction = async (
   name: string
@@ -60,16 +64,30 @@ export const deleteWorkflowAction = async (
   return { ok: true, data: undefined }
 }
 
-export const runWorkflowAction = async () => {
+export const runWorkflowAction = async ({
+  id,
+  graph,
+}: {
+  id: string
+  graph: WorkflowGraph
+}) => {
   const { orgId } = await auth()
 
   if (!orgId) {
     throw new Error("No active organization")
   }
 
+  await saveWorkflowGraph({ id, orgId, graph })
+
   const handle = await tasks.trigger<typeof helloWorldTask>("hello-world", {
     message: "hello from right-sidebar",
   })
 
   return handle
+}
+
+export const cancelWorkflowAction = async (runId: string) => {
+  const { orgId } = await auth()
+  if (!orgId) throw new Error("No active organization")
+  await runs.cancel(runId)
 }

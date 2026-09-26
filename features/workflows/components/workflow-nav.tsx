@@ -22,7 +22,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { createWorkflowAction } from "@/features/workflows/lib/actions"
+import { createWorkflowAction } from "@/features/workflows/actions"
 import { generateSlug } from "@/features/workflows/lib/generate-slug"
 import type { Workflow } from "@/lib/db/schema"
 
