@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { MoreHorizontal, Play, Trash2 } from "lucide-react"
+import { useReactFlow, useStoreApi } from "@xyflow/react"
+import { toast } from "sonner"
 
 import {
   Accordion,
@@ -156,11 +158,52 @@ const sections: { kind: StepNodeKind; label: string }[] = [
 // Every node type from the registry, filtered into the groups below.
 const definitions = Object.values(nodeRegistry)
 
+// Next numbered title for a node type ("Open URL 1", "Open URL 2", ...). Uses the
+// highest existing number, so deleting a node never produces a duplicate title.
+function nextTitle(label: string, nodes: StepNodeType[]) {
+  const prefix = `${label} `
+  const max = nodes.reduce((acc, node) => {
+    const { title } = node.data
+    if (!title.startsWith(prefix)) return acc
+    const suffix = title.slice(prefix.length)
+    return /^\d+$/.test(suffix) ? Math.max(acc, Number(suffix)) : acc
+  }, 0)
+  return `${label} ${max + 1}`
+}
+
 // The Toolbar tab: a button per node type that adds it to the canvas.
 function Palette() {
+  const { getNodes, addNodes } = useReactFlow<StepNodeType>()
+  const store = useStoreApi<StepNodeType>()
+
   const add = (type: NodeType) => {
-    // TODO: add the clicked node to the canvas (one trigger max).
-    void type
+    const def: NodeDefinition = nodeRegistry[type]
+    const nodes = getNodes()
+
+    if (
+      def.kind === "trigger" &&
+      nodes.some((n) => n.data.kind === "trigger")
+    ) {
+      toast.error("A workflow can only have one trigger")
+      return
+    }
+
+    // Center of the visible canvas, converted from screen to flow coordinates.
+    const { width, height, transform } = store.getState()
+    const [x, y, zoom] = transform
+    const position = { x: (width / 2 - x) / zoom, y: (height / 2 - y) / zoom }
+
+    addNodes({
+      id: crypto.randomUUID(),
+      type: "step",
+      position,
+      data: {
+        type,
+        kind: def.kind,
+        title: def.kind === "trigger" ? def.label : nextTitle(def.label, nodes),
+        values: {},
+      },
+    })
   }
 
   return (

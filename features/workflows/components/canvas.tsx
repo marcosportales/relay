@@ -66,6 +66,7 @@ export function Canvas() {
         nodeTypes={nodeTypes}
         nodes={nodes}
         edges={edges}
+        nodeOrigin={[0.5, 0.5]}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

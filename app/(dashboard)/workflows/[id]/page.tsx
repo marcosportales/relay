@@ -1,10 +1,10 @@
 import { auth } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
+import { ReactFlowProvider } from "@xyflow/react"
 import { getWorkflow } from "@/features/workflows/data"
 import { Room } from "@/features/workflows/components/room"
 import { WorkflowShell } from "@/features/workflows/components/workflow-shell"
 import { liveblocks } from "@/lib/liveblocks"
-import { title } from "process"
 
 export default async function Page({
   params,
@@ -30,7 +30,10 @@ export default async function Page({
 
   return (
     <Room roomId={id}>
-      <WorkflowShell workflowId={id} />
+      {/* Shared React Flow store for the canvas and the sidebar palette. */}
+      <ReactFlowProvider>
+        <WorkflowShell workflowId={id} />
+      </ReactFlowProvider>
     </Room>
   )
 }
