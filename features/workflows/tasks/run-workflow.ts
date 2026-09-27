@@ -47,13 +47,19 @@ export const runWorkflowTask = task({
 
     let browser: Awaited<ReturnType<typeof browserbase.launch>> | undefined
     let stagehand: Stagehand | undefined
+    // Browserbase session backing the run, for replaying its recording later.
+    // Stays null when no step opened a browser.
+    let sessionId: string | null = null
     const getStagehand = async () => {
       if (stagehand) return stagehand
 
       browser = await browserbase.launch({
         apiKey: process.env.BROWSERBASE_API_KEY!,
         projectId: process.env.BROWSERBASE_PROJECT_ID,
+        // Lets the replay route check the session belongs to the viewer's org.
+        userMetadata: { orgId },
       })
+      sessionId = browser.sessionId ?? null
 
       stagehand = await Stagehand.create({
         browser,
@@ -127,6 +133,6 @@ export const runWorkflowTask = task({
       await browser?.close()
     }
 
-    return { steps }
+    return { steps, sessionId }
   },
 })

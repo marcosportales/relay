@@ -16,6 +16,10 @@ type RealtimeWorkflowRun = ReturnType<
 export type WorkflowRun = RealtimeWorkflowRun & {
   steps: RunStep[]
   isLive: boolean
+  // Browserbase session to replay. Only read from the final output: the
+  // recording isn't ready until the session closes, so a live or failed run
+  // (no output) has none.
+  sessionId: string | null
 }
 
 // A run's steps: the final output once it completes, otherwise the live
@@ -51,6 +55,7 @@ export function WorkflowRunsProvider({
         .map((run) => ({
           ...run,
           steps: getRunSteps(run),
+          sessionId: run.output?.sessionId ?? null,
           isLive: run.status === "QUEUED" || run.status === "EXECUTING",
         }))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),

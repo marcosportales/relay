@@ -7,32 +7,39 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
-import { InspectorPanel } from "@/features/workflows/components/inspector-panel"
 import {
+  InspectorPanel,
+  type InspectorTarget,
+} from "@/features/workflows/components/inspector-panel"
+import {
+  isSameSelection,
   LogsPanel,
-  type StepSelection,
+  type ConsoleSelection,
 } from "@/features/workflows/components/logs-panel"
 import { useWorkflowRuns } from "@/features/workflows/components/workflow-runs-provider"
 
-// The console under the canvas. Owns which run step is selected, and shows that
-// step's result beside the logs.
+// The console under the canvas. Owns what's selected (a run step or a run's
+// replay, one at a time), and shows it beside the logs.
 export function ConsolePanel() {
-  const [selection, setSelection] = useState<StepSelection | null>(null)
+  const [selection, setSelection] = useState<ConsoleSelection | null>(null)
   const runs = useWorkflowRuns()
 
   // Resolved from the live runs, so the inspector updates as the step does.
-  const selectedStep = selection
-    ? runs
-        .find((run) => run.id === selection.runId)
-        ?.steps.find((step) => step.id === selection.stepId)
+  const selectedRun = selection
+    ? runs.find((run) => run.id === selection.runId)
     : undefined
+  let target: InspectorTarget | undefined
+  if (selection?.kind === "step") {
+    const step = selectedRun?.steps.find((s) => s.id === selection.stepId)
+    if (step) target = { kind: "step", step }
+  } else if (selection?.kind === "replay" && selectedRun?.sessionId) {
+    target = { kind: "replay", sessionId: selectedRun.sessionId }
+  }
 
-  // Clicking the selected step again clears the selection.
-  const toggle = (next: StepSelection) =>
+  // Clicking the selected row again clears the selection.
+  const toggle = (next: ConsoleSelection) =>
     setSelection((current) =>
-      current?.runId === next.runId && current.stepId === next.stepId
-        ? null
-        : next
+      current && isSameSelection(current, next) ? null : next
     )
 
   return (
@@ -49,9 +56,9 @@ export function ConsolePanel() {
           <LogsPanel selection={selection} onSelect={toggle} />
         </div>
       </ResizablePanel>
-      {/* Mounted only while a step is selected; stable ids let the group
+      {/* Mounted only while something is selected; stable ids let the group
           re-layout as the inspector comes and goes. */}
-      {selectedStep && (
+      {target && (
         <>
           <ResizableHandle withHandle />
           <ResizablePanel
@@ -60,7 +67,7 @@ export function ConsolePanel() {
             minSize="12rem"
             className="flex"
           >
-            <InspectorPanel step={selectedStep} />
+            <InspectorPanel target={target} />
           </ResizablePanel>
         </>
       )}

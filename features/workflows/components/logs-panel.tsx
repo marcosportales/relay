@@ -1,5 +1,6 @@
 "use client"
 
+import { MonitorPlayIcon } from "lucide-react"
 import prettyMs from "pretty-ms"
 
 import { cn } from "@/lib/utils"
@@ -11,8 +12,25 @@ import {
 } from "@/features/workflows/components/workflow-runs-provider"
 import type { RunStep } from "@/features/workflows/tasks/run-workflow"
 
+// What the console has selected: one step of a run, or a whole run's replay.
 // A step is identified by its run too: the same node appears in every run.
-export type StepSelection = { runId: string; stepId: string }
+export type ConsoleSelection =
+  | { kind: "step"; runId: string; stepId: string }
+  | { kind: "replay"; runId: string }
+
+export function isSameSelection(a: ConsoleSelection, b: ConsoleSelection) {
+  if (a.kind === "step" && b.kind === "step")
+    return a.runId === b.runId && a.stepId === b.stepId
+  return a.kind === b.kind && a.runId === b.runId
+}
+
+// Hover stays lighter than the selected fill, so a click on the hovered row
+// still visibly changes it.
+const rowClassName = (selected: boolean) =>
+  cn(
+    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground",
+    selected && "bg-accent text-accent-foreground hover:bg-accent"
+  )
 
 interface StepRowProps {
   step: RunStep
@@ -33,11 +51,8 @@ function StepRow({ step, isLive, selected, onClick }: StepRowProps) {
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      // Hover stays lighter than the selected fill, so a click on the hovered
-      // row still visibly changes it.
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground",
-        selected && "bg-accent text-accent-foreground hover:bg-accent",
+        rowClassName(selected),
         isFailed && "text-destructive hover:text-destructive",
         neverRan && "opacity-50"
       )}
@@ -57,14 +72,39 @@ function StepRow({ step, isLive, selected, onClick }: StepRowProps) {
   )
 }
 
-interface RunItemProps {
-  run: WorkflowRun
-  selection: StepSelection | null
-  onSelect: (selection: StepSelection) => void
+interface ReplayRowProps {
+  selected: boolean
+  onClick: () => void
 }
 
-// A run's header followed by its steps.
+// The run's browser recording, listed after its steps but standing for the
+// whole run.
+function ReplayRow({ selected, onClick }: ReplayRowProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={rowClassName(selected)}
+    >
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+        <MonitorPlayIcon className="size-3.5" />
+      </span>
+      <span className="min-w-0 flex-1 truncate font-medium">Replay</span>
+    </button>
+  )
+}
+
+interface RunItemProps {
+  run: WorkflowRun
+  selection: ConsoleSelection | null
+  onSelect: (selection: ConsoleSelection) => void
+}
+
+// A run's header followed by its steps, and its replay once it has one.
 function RunItem({ run, selection, onSelect }: RunItemProps) {
+  const hasReplay = run.sessionId !== null && !run.isLive
+
   return (
     <li className="flex flex-col gap-0.5">
       <div className="flex items-center gap-2 px-2 py-1 text-xs">
@@ -88,17 +128,29 @@ function RunItem({ run, selection, onSelect }: RunItemProps) {
           key={step.id}
           step={step}
           isLive={run.isLive}
-          selected={selection?.runId === run.id && selection.stepId === step.id}
-          onClick={() => onSelect({ runId: run.id, stepId: step.id })}
+          selected={
+            selection?.kind === "step" &&
+            selection.runId === run.id &&
+            selection.stepId === step.id
+          }
+          onClick={() =>
+            onSelect({ kind: "step", runId: run.id, stepId: step.id })
+          }
         />
       ))}
+      {hasReplay && (
+        <ReplayRow
+          selected={selection?.kind === "replay" && selection.runId === run.id}
+          onClick={() => onSelect({ kind: "replay", runId: run.id })}
+        />
+      )}
     </li>
   )
 }
 
 interface LogsPanelProps {
-  selection: StepSelection | null
-  onSelect: (selection: StepSelection) => void
+  selection: ConsoleSelection | null
+  onSelect: (selection: ConsoleSelection) => void
 }
 
 // Every run of the workflow, newest first, each followed by its steps.
