@@ -11,6 +11,10 @@ import {
   deleteWorkflow,
   saveWorkflowGraph,
 } from "@/features/workflows/data"
+import {
+  nodeRegistry,
+  type NodeDefinition,
+} from "@/features/workflows/nodes/node-registry"
 
 import { liveblocks } from "@/lib/liveblocks"
 
@@ -73,10 +77,21 @@ export const runWorkflowAction = async ({
   id: string
   graph: WorkflowGraph
 }): Promise<ActionResult<{ runId: string }>> => {
-  const { orgId } = await auth()
+  const { orgId, has } = await auth()
 
   if (!orgId) {
     return { ok: false, error: "No active organization" }
+  }
+
+  // Premium nodes (the Agent node) only run for orgs on the pro plan. Checked
+  // here because the run task has no Clerk session to check it against.
+  const usesPremium = graph.nodes.some((node) => {
+    // The graph comes from the client, so the type may not be in the registry.
+    const def: NodeDefinition | undefined = nodeRegistry[node.data.type]
+    return def?.premium
+  })
+  if (usesPremium && !has({ plan: "org:pro" })) {
+    return { ok: false, error: "The Agent node requires the Pro plan" }
   }
 
   try {

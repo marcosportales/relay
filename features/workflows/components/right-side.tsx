@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Play, Trash2 } from "lucide-react"
+import { Lock, MoreHorizontal, Play, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
 import { toast } from "sonner"
 
@@ -42,6 +42,7 @@ import {
   useUpstreamConnections,
   type UpstreamConnection,
 } from "@/features/workflows/hooks/use-upstream-connections"
+import { useProPlan } from "@/features/workflows/hooks/use-pro-plan"
 import { NodeIcon } from "@/features/workflows/components/node-icon"
 import { validateGraph } from "../lib/validate-graph"
 
@@ -241,7 +242,7 @@ const sections: { kind: StepNodeKind; label: string }[] = [
 ]
 
 // Every node type from the registry, filtered into the groups below.
-const definitions = Object.values(nodeRegistry)
+const definitions: NodeDefinition[] = Object.values(nodeRegistry)
 
 // Next numbered title for a node type ("Open URL 1", "Open URL 2", ...). Uses the
 // highest existing number, so deleting a node never produces a duplicate title.
@@ -256,10 +257,12 @@ function nextTitle(label: string, nodes: StepNodeType[]) {
   return `${label} ${max + 1}`
 }
 
-// The Toolbar tab: a button per node type that adds it to the canvas.
+// The Toolbar tab: a button per node type that adds it to the canvas. Premium
+// nodes are locked for orgs off the pro plan and link to upgrade instead.
 function Palette() {
   const { getNodes, addNodes } = useReactFlow<StepNodeType>()
   const store = useStoreApi<StepNodeType>()
+  const { isLoaded, isPro, upgrade } = useProPlan()
 
   const add = (type: NodeType) => {
     const def: NodeDefinition = nodeRegistry[type]
@@ -310,17 +313,37 @@ function Palette() {
             <AccordionContent className="flex flex-col gap-0.5">
               {definitions
                 .filter((def) => def.kind === section.kind)
-                .map((def) => (
-                  <Button
-                    key={def.type}
-                    variant="ghost"
-                    onClick={() => add(def.type as NodeType)}
-                    className="justify-start gap-2.5 px-1.5 text-xs"
-                  >
-                    <NodeIcon type={def.type as NodeType} />
-                    {def.label}
-                  </Button>
-                ))}
+                .map((def) => {
+                  const locked = def.premium && !isPro
+
+                  return (
+                    <Button
+                      key={def.type}
+                      variant="ghost"
+                      // Don't guess the plan before Clerk has loaded it.
+                      disabled={def.premium && !isLoaded}
+                      title={
+                        locked ? "Upgrade to Pro to use this node" : undefined
+                      }
+                      onClick={() =>
+                        locked ? upgrade() : add(def.type as NodeType)
+                      }
+                      className="justify-start gap-2.5 px-1.5 text-xs"
+                    >
+                      <NodeIcon type={def.type as NodeType} />
+                      <span
+                        className={locked ? "text-muted-foreground" : undefined}
+                      >
+                        {def.label}
+                      </span>
+                      {locked && (
+                        <span className="ml-auto flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                          <Lock className="size-3" />
+                        </span>
+                      )}
+                    </Button>
+                  )
+                })}
             </AccordionContent>
           </AccordionItem>
         ))}
@@ -403,15 +426,14 @@ function RunButton({ workflowId }: RunButtonProps) {
         }
 
         startTransition(async () => {
-          await runWorkflowAction({ id: workflowId, graph })
-          /* const result = await runWorkflowAction({ id: workflowId, graph })
+          const result = await runWorkflowAction({ id: workflowId, graph })
 
           if (!result.ok) {
             toast.error(result.error)
             return
           }
 
-          toast.success("Workflow started") */
+          /* toast.success("Workflow started") */
         })
       }}
     >

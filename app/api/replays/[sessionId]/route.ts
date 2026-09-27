@@ -11,8 +11,11 @@ export async function GET(
   _: Request,
   ctx: RouteContext<"/api/replays/[sessionId]">
 ) {
-  const { orgId } = await auth()
+  const { orgId, has } = await auth()
   if (!orgId) return new Response("Unauthorized", { status: 401 })
+  // Session replay is a pro feature.
+  if (!has({ plan: "org:pro" }))
+    return new Response("Pro plan required", { status: 403 })
 
   const { sessionId } = await ctx.params
 

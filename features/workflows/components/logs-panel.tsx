@@ -1,6 +1,6 @@
 "use client"
 
-import { MonitorPlayIcon } from "lucide-react"
+import { Lock, MonitorPlayIcon } from "lucide-react"
 import prettyMs from "pretty-ms"
 
 import { cn } from "@/lib/utils"
@@ -10,6 +10,7 @@ import {
   useWorkflowRuns,
   type WorkflowRun,
 } from "@/features/workflows/components/workflow-runs-provider"
+import { useProPlan } from "@/features/workflows/hooks/use-pro-plan"
 import type { RunStep } from "@/features/workflows/tasks/run-workflow"
 
 // What the console has selected: one step of a run, or a whole run's replay.
@@ -78,19 +79,30 @@ interface ReplayRowProps {
 }
 
 // The run's browser recording, listed after its steps but standing for the
-// whole run.
+// whole run. Replays are a pro feature: other orgs are sent to upgrade instead.
 function ReplayRow({ selected, onClick }: ReplayRowProps) {
+  const { isLoaded, isPro, upgrade } = useProPlan()
+  const locked = !isPro
+
   return (
     <button
       type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={rowClassName(selected)}
+      aria-pressed={selected && !locked}
+      // Don't guess the plan before Clerk has loaded it.
+      disabled={!isLoaded}
+      title={locked ? "Upgrade to Pro to watch replays" : undefined}
+      onClick={locked ? upgrade : onClick}
+      className={rowClassName(selected && !locked)}
     >
       <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
         <MonitorPlayIcon className="size-3.5" />
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">Replay</span>
+      {locked && (
+        <span className="flex shrink-0 items-center gap-1 text-[10px] leading-none font-medium text-muted-foreground">
+          <Lock className="size-3" />
+        </span>
+      )}
     </button>
   )
 }
