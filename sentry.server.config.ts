@@ -8,4 +8,9 @@ Sentry.init({
 
   // Attach local variable values to stack frames
   includeLocalVariables: true,
+
+  // Forward console warnings/errors as Sentry logs
+  integrations: [
+    Sentry.consoleLoggingIntegration({ levels: ["warn", "error"] }),
+  ],
 })

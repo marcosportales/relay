@@ -10,7 +10,11 @@ Sentry.init({
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 
-  integrations: [Sentry.replayIntegration()],
+  // Forward console warnings/errors as Sentry logs
+  integrations: [
+    Sentry.replayIntegration(),
+    Sentry.consoleLoggingIntegration({ levels: ["warn", "error"] }),
+  ],
 })
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart

@@ -1,5 +1,7 @@
 "use client"
 
+import * as Sentry from "@sentry/nextjs"
+
 import { Spinner } from "@/components/ui/spinner"
 import {
   LiveblocksProvider,
@@ -25,10 +27,18 @@ export function Room({ roomId, children }: RoomProps) {
             body: JSON.stringify({ userIds }),
           })
 
-          if (!response.ok) return undefined
+          if (!response.ok) {
+            Sentry.logger.warn("Failed to resolve Liveblocks users", {
+              "http.response.status_code": response.status,
+            })
+            return undefined
+          }
 
           return await response.json()
-        } catch {
+        } catch (error) {
+          Sentry.logger.warn("Failed to resolve Liveblocks users", {
+            reason: error instanceof Error ? error.message : String(error),
+          })
           return undefined
         }
       }}

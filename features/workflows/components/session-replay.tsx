@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Hls from "hls.js"
+import * as Sentry from "@sentry/nextjs"
 
 import { cn } from "@/lib/utils"
 
@@ -34,6 +35,10 @@ export function SessionReplay({ sessionId, className }: SessionReplayProps) {
     setError(null)
 
     const fail = (message: string) => {
+      Sentry.logger.warn("Session replay unavailable", {
+        "browserbase.session_id": sessionId,
+        reason: message,
+      })
       setError(message)
       setStatus("error")
     }
@@ -63,7 +68,7 @@ export function SessionReplay({ sessionId, className }: SessionReplayProps) {
       controller.abort()
       clearTimeout(timeout)
     }
-  }, [src])
+  }, [src, sessionId])
 
   useEffect(() => {
     const video = videoRef.current
@@ -74,6 +79,9 @@ export function SessionReplay({ sessionId, className }: SessionReplayProps) {
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = src
       } else {
+        Sentry.logger.warn("Browser can't play HLS replay", {
+          "browserbase.session_id": sessionId,
+        })
         setError("This browser can't play the replay.")
         setStatus("error")
       }
@@ -83,13 +91,18 @@ export function SessionReplay({ sessionId, className }: SessionReplayProps) {
     const hls = new Hls()
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return
+      Sentry.logger.error("Session replay playback failed", {
+        "browserbase.session_id": sessionId,
+        "hls.error_type": data.type,
+        "hls.error_details": data.details,
+      })
       setError("Playback failed.")
       setStatus("error")
     })
     hls.loadSource(src)
     hls.attachMedia(video)
     return () => hls.destroy()
-  }, [status, src])
+  }, [status, src, sessionId])
 
   return (
     <div

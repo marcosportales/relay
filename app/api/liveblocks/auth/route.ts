@@ -1,4 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
+import * as Sentry from "@sentry/nextjs"
 
 import { liveblocks } from "@/lib/liveblocks"
 
@@ -32,6 +33,13 @@ export async function POST() {
       },
     }
   )
+
+  if (status !== 200) {
+    Sentry.logger.error("Liveblocks identifyUser failed", {
+      "org.id": orgId,
+      "http.response.status_code": status,
+    })
+  }
 
   return new Response(body, { status })
 }

@@ -1,6 +1,7 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
+import * as Sentry from "@sentry/nextjs"
 import { runs, tasks } from "@trigger.dev/sdk"
 import { revalidatePath } from "next/cache"
 
@@ -35,7 +36,11 @@ export const createWorkflowAction = async (
     return { ok: false, error: "No active organization" }
   }
 
+  Sentry.getIsolationScope().setAttributes({ "org.id": orgId })
+
   const workflow = await createWorkflow(orgId, name)
+
+  Sentry.logger.info("Workflow created", { "workflow.id": workflow.id })
 
   revalidatePath("/workflows", "layout")
   return { ok: true, data: { id: workflow.id } }
@@ -50,9 +55,15 @@ export const deleteWorkflowAction = async (
     return { ok: false, error: "No active organization" }
   }
 
+  Sentry.getIsolationScope().setAttributes({
+    "org.id": orgId,
+    "workflow.id": id,
+  })
+
   const workflow = await deleteWorkflow(orgId, id)
 
   if (!workflow) {
+    Sentry.logger.warn("Workflow to delete not found")
     return { ok: false, error: "Workflow not found" }
   }
 
@@ -62,9 +73,14 @@ export const deleteWorkflowAction = async (
     await liveblocks.deleteRoom(workflow.id)
   } catch (error) {
     if (!(error instanceof LiveblocksError && error.status === 404)) {
-      console.error(`Failed to delete Liveblocks room ${workflow.id}`, error)
+      Sentry.logger.error("Failed to delete Liveblocks room", {
+        reason: error instanceof Error ? error.message : String(error),
+      })
+      Sentry.captureException(error)
     }
   }
+
+  Sentry.logger.info("Workflow deleted")
 
   revalidatePath("/workflows", "layout")
   return { ok: true, data: undefined }
@@ -83,6 +99,11 @@ export const runWorkflowAction = async ({
     return { ok: false, error: "No active organization" }
   }
 
+  Sentry.getIsolationScope().setAttributes({
+    "org.id": orgId,
+    "workflow.id": id,
+  })
+
   // Premium nodes (the Agent node) only run for orgs on the pro plan. Checked
   // here because the run task has no Clerk session to check it against.
   const usesPremium = graph.nodes.some((node) => {
@@ -91,6 +112,7 @@ export const runWorkflowAction = async ({
     return def?.premium
   })
   if (usesPremium && !has({ plan: "org:pro" })) {
+    Sentry.logger.warn("Workflow run blocked: premium node without Pro plan")
     return { ok: false, error: "The Agent node requires the Pro plan" }
   }
 
@@ -106,9 +128,18 @@ export const runWorkflowAction = async ({
       { tags: [`workflow:${id}`] }
     )
 
+    Sentry.logger.info("Workflow run triggered", {
+      "run.id": handle.id,
+      "workflow.node_count": graph.nodes.length,
+      "workflow.uses_premium": usesPremium,
+    })
+
     return { ok: true, data: { runId: handle.id } }
   } catch (error) {
-    console.error(`Failed to run workflow ${id}`, error)
+    Sentry.logger.error("Failed to run workflow", {
+      reason: error instanceof Error ? error.message : String(error),
+    })
+    Sentry.captureException(error)
     return { ok: false, error: "Failed to run workflow" }
   }
 }
@@ -116,5 +147,12 @@ export const runWorkflowAction = async ({
 export const cancelWorkflowAction = async (runId: string) => {
   const { orgId } = await auth()
   if (!orgId) throw new Error("No active organization")
+
+  Sentry.getIsolationScope().setAttributes({
+    "org.id": orgId,
+    "run.id": runId,
+  })
+
   await runs.cancel(runId)
+  Sentry.logger.info("Workflow run cancelled")
 }

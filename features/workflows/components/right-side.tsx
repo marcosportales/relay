@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, MoreHorizontal, Play, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
+import * as Sentry from "@sentry/nextjs"
 import { toast } from "sonner"
 
 import {
@@ -460,6 +461,13 @@ function RunButton({ workflowId }: RunButtonProps) {
       } else if (run.isCancelled) {
         toast.info("Workflow cancelled")
       } else {
+        // The run's own error is reported from Trigger.dev; this ties the
+        // failure the user saw to their session replay.
+        Sentry.logger.warn("Workflow run failed", {
+          "workflow.id": workflowId,
+          "run.id": run.id,
+          reason: run.error?.message ?? "unknown",
+        })
         toast.error(run.error?.message ?? "Workflow failed")
       }
     }

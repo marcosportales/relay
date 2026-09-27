@@ -1,4 +1,5 @@
 import { auth, clerkClient } from "@clerk/nextjs/server"
+import * as Sentry from "@sentry/nextjs"
 
 const MAX_USER_IDS = 100
 
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
   const userIds = parseUserIds(await request.json().catch(() => null))
 
   if (!userIds) {
+    Sentry.logger.warn("Invalid Liveblocks resolve-users request", {
+      "org.id": orgId,
+    })
     return new Response("Bad Request", { status: 400 })
   }
 
