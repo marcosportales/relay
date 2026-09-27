@@ -11,8 +11,10 @@ import {
   deleteWorkflow,
   saveWorkflowGraph,
 } from "@/features/workflows/data"
+
 import { liveblocks } from "@/lib/liveblocks"
-import type { helloWorldTask } from "@/trigger/example"
+
+import type { runWorkflowTask } from "@/features/workflows/tasks/run-workflow"
 import type { WorkflowGraph } from "@/lib/db/schema"
 
 // Expected failures are returned as values: errors thrown from server actions
@@ -70,20 +72,30 @@ export const runWorkflowAction = async ({
 }: {
   id: string
   graph: WorkflowGraph
-}) => {
+}): Promise<ActionResult<{ runId: string }>> => {
   const { orgId } = await auth()
 
   if (!orgId) {
-    throw new Error("No active organization")
+    return { ok: false, error: "No active organization" }
   }
 
-  await saveWorkflowGraph({ id, orgId, graph })
+  try {
+    await saveWorkflowGraph({ id, orgId, graph })
 
-  const handle = await tasks.trigger<typeof helloWorldTask>("hello-world", {
-    message: "hello from right-sidebar",
-  })
+    const handle = await tasks.trigger<typeof runWorkflowTask>(
+      "run-workflow",
+      {
+        workflowId: id,
+        orgId,
+      },
+      { tags: [`workflow:${id}`] }
+    )
 
-  return handle
+    return { ok: true, data: { runId: handle.id } }
+  } catch (error) {
+    console.error(`Failed to run workflow ${id}`, error)
+    return { ok: false, error: "Failed to run workflow" }
+  }
 }
 
 export const cancelWorkflowAction = async (runId: string) => {

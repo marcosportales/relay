@@ -27,7 +27,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-import { deleteWorkflowAction } from "@/features/workflows/actions"
+import {
+  deleteWorkflowAction,
+  runWorkflowAction,
+} from "@/features/workflows/actions"
 import {
   nodeRegistry,
   type NodeDefinition,
@@ -36,6 +39,7 @@ import {
   type StepNodeKind,
   type StepNodeType,
 } from "@/features/workflows/nodes/node-registry"
+import { validateGraph } from "../lib/validate-graph"
 
 // This file builds up to the RightSidebar component exported at the bottom: a
 // header with workflow actions (delete, run), then two tabs — a Toolbar for
@@ -308,18 +312,45 @@ function ActionsMenu({ workflowId }: ActionsMenuProps) {
   )
 }
 
+interface RunButtonProps {
+  workflowId: string
+}
+
 // Kicks off a run of the current workflow.
-function RunButton() {
+function RunButton({ workflowId }: RunButtonProps) {
+  const { getNodes, getEdges } = useReactFlow<StepNodeType>()
+  const [isPending, startTransition] = useTransition()
+
   return (
     <Button
       size="sm"
       variant="secondary"
+      disabled={isPending}
+
       onClick={() => {
-        // TODO: validate the graph and run the workflow (toggle to Stop while running).
+        const graph = { nodes: getNodes(), edges: getEdges() }
+        const problems = validateGraph(graph)
+
+        if (problems.length > 0) {
+          toast.error(problems[0])
+          return
+        }
+
+        startTransition(async () => {
+          await runWorkflowAction({ id: workflowId, graph })
+          /* const result = await runWorkflowAction({ id: workflowId, graph })
+
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+
+          toast.success("Workflow started") */
+        })
       }}
     >
-      <Play fill="primary" />
-      Run
+      {isPending ? <Spinner /> : <Play fill="primary" />}
+      {isPending ? "Running..." : "Run"}
     </Button>
   )
 }
@@ -353,7 +384,7 @@ export function RightSide({ workflowId }: RightSideProps) {
       <Tabs value={tab} onValueChange={setTab} className="size-full gap-0">
         <div className="flex items-center justify-between border-b border-border p-2">
           <ActionsMenu workflowId={workflowId} />
-          <RunButton />
+          <RunButton workflowId={workflowId} />
         </div>
         <TabsList className="m-2 w-fit bg-background">
           <TabsTrigger
