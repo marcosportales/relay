@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, MoreHorizontal, Play, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
@@ -43,6 +43,7 @@ import {
   type UpstreamConnection,
 } from "@/features/workflows/hooks/use-upstream-connections"
 import { useProPlan } from "@/features/workflows/hooks/use-pro-plan"
+import { useWorkflowRuns } from "@/features/workflows/components/workflow-runs-provider"
 import { NodeIcon } from "@/features/workflows/components/node-icon"
 import { validateGraph } from "../lib/validate-graph"
 
@@ -405,17 +406,71 @@ interface RunButtonProps {
   workflowId: string
 }
 
-// Kicks off a run of the current workflow.
+// Runs this tab started, per workflow, so their outcome is still toasted after a
+// reload. Session storage can be unavailable (private mode, blocked storage), in
+// which case tracking just doesn't survive the reload.
+function ownRunsKey(workflowId: string) {
+  return `relay:own-runs:${workflowId}`
+}
+
+function loadOwnRuns(workflowId: string): Set<string> {
+  try {
+    const stored = sessionStorage.getItem(ownRunsKey(workflowId))
+    return new Set(stored ? (JSON.parse(stored) as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveOwnRuns(workflowId: string, runIds: Set<string>) {
+  try {
+    sessionStorage.setItem(ownRunsKey(workflowId), JSON.stringify([...runIds]))
+  } catch {}
+}
+
+// Kicks off a run of the current workflow. Stays busy while any run of the
+// workflow is unfinished — including one a collaborator started, or one still
+// going after a reload — and toasts the outcome of the runs this tab started.
 function RunButton({ workflowId }: RunButtonProps) {
   const { getNodes, getEdges } = useReactFlow<StepNodeType>()
   const [isPending, startTransition] = useTransition()
+  // The run just triggered, until the realtime feed picks it up.
+  const [triggeredRunId, setTriggeredRunId] = useState<string | null>(null)
+  // Loaded lazily in the effect: session storage isn't available during SSR.
+  const ownRuns = useRef<Set<string> | null>(null)
+
+  const runs = useWorkflowRuns()
+  const isRunning =
+    isPending ||
+    runs.some((run) => !run.isCompleted) ||
+    (triggeredRunId !== null && !runs.some((run) => run.id === triggeredRunId))
+
+  useEffect(() => {
+    ownRuns.current ??= loadOwnRuns(workflowId)
+    const own = ownRuns.current
+
+    const finished = runs.filter((run) => run.isCompleted && own.has(run.id))
+    if (finished.length === 0) return
+
+    for (const run of finished) {
+      own.delete(run.id)
+
+      if (run.isSuccess) {
+        toast.success("Workflow completed")
+      } else if (run.isCancelled) {
+        toast.info("Workflow cancelled")
+      } else {
+        toast.error(run.error?.message ?? "Workflow failed")
+      }
+    }
+    saveOwnRuns(workflowId, own)
+  }, [runs, workflowId])
 
   return (
     <Button
       size="sm"
       variant="secondary"
-      disabled={isPending}
-
+      disabled={isRunning}
       onClick={() => {
         const graph = { nodes: getNodes(), edges: getEdges() }
         const problems = validateGraph(graph)
@@ -433,12 +488,15 @@ function RunButton({ workflowId }: RunButtonProps) {
             return
           }
 
-          /* toast.success("Workflow started") */
+          ownRuns.current ??= loadOwnRuns(workflowId)
+          ownRuns.current.add(result.data.runId)
+          saveOwnRuns(workflowId, ownRuns.current)
+          setTriggeredRunId(result.data.runId)
         })
       }}
     >
-      {isPending ? <Spinner /> : <Play fill="primary" />}
-      {isPending ? "Running..." : "Run"}
+      {isRunning ? <Spinner /> : <Play fill="primary" />}
+      {isRunning ? "Running..." : "Run"}
     </Button>
   )
 }
