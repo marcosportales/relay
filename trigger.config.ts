@@ -19,4 +19,9 @@ export default defineConfig({
     },
   },
   dirs: ["features"],
+  build: {
+    // Stagehand resolves its extension zip relative to its own module file, so it
+    // must load from node_modules rather than be bundled into the task.
+    external: ["@browserbasehq/stagehand"],
+  },
 })

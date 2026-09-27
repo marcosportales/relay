@@ -2,6 +2,8 @@ import toposort from "toposort"
 import { logger, task } from "@trigger.dev/sdk"
 
 import { getWorkflow } from "../data"
+import { browserbase, Stagehand } from "@browserbasehq/stagehand"
+import { nodeExecutors } from "../nodes/node-executors"
 
 export const runWorkflowTask = task({
   id: "run-workflow",
@@ -19,13 +21,42 @@ export const runWorkflowTask = task({
       )
       .filter((id) => connected.has(id))
 
-    logger.log(`Running step: ${workflow.name}`, { steps: order.length })
+    logger.log(`Running workflow: ${workflow.name}`, { steps: order.length })
 
-    for (const id of order) {
-      const node = byId.get(id)
-      logger.log(`Running step: ${node?.data.title}`)
-      // TODO: actually execute the node instead of just logging, and report
-      // its progress so the UI can watch the run live
+    let browser: Awaited<ReturnType<typeof browserbase.launch>> | undefined
+    let stagehand: Stagehand | undefined
+    const getStagehand = async () => {
+      if (stagehand) return stagehand
+
+      browser = await browserbase.launch({
+        apiKey: process.env.BROWSERBASE_API_KEY!,
+        projectId: process.env.BROWSERBASE_PROJECT_ID,
+      })
+
+      stagehand = await Stagehand.create({
+        browser,
+        model: { modelName: "google/gemini-2.5-flash" },
+        logging: { level: "off" },
+      })
+
+      return stagehand
+    }
+
+    try {
+      for (const id of order) {
+        const node = byId.get(id)
+        if (!node)
+          throw new Error(
+            `Workflow ${workflowId} references unknown node ${id}`
+          )
+        logger.log(`Running step: ${node.data.title}`)
+        const executor = nodeExecutors[node.data.type]
+        if (!executor) continue
+        await executor({ values: node.data.values, getStagehand })
+      }
+    } finally {
+      await stagehand?.close()
+      await browser?.close()
     }
 
     return { steps: order.length }
