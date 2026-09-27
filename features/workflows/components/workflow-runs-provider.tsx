@@ -16,6 +16,9 @@ type RealtimeWorkflowRun = ReturnType<
 export type WorkflowRun = RealtimeWorkflowRun & {
   steps: RunStep[]
   isLive: boolean
+  // Reached a final status. Trigger.dev's `isCompleted` leaves out cancelled
+  // runs, so it can't be used on its own to tell whether a run is over.
+  isFinished: boolean
   // Browserbase session to replay. Only read from the final output: the
   // recording isn't ready until the session closes, so a live or failed run
   // (no output) has none.
@@ -57,6 +60,7 @@ export function WorkflowRunsProvider({
           steps: getRunSteps(run),
           sessionId: run.output?.sessionId ?? null,
           isLive: run.status === "QUEUED" || run.status === "EXECUTING",
+          isFinished: run.isCompleted || run.isCancelled,
         }))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
     [runs]

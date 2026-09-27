@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, MoreHorizontal, Play, Trash2 } from "lucide-react"
+import { Lock, MoreHorizontal, Play, Square, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
 import * as Sentry from "@sentry/nextjs"
 import { toast } from "sonner"
@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
 import {
+  cancelWorkflowAction,
   deleteWorkflowAction,
   runWorkflowAction,
 } from "@/features/workflows/actions"
@@ -429,28 +430,38 @@ function saveOwnRuns(workflowId: string, runIds: Set<string>) {
   } catch {}
 }
 
-// Kicks off a run of the current workflow. Stays busy while any run of the
-// workflow is unfinished — including one a collaborator started, or one still
-// going after a reload — and toasts the outcome of the runs this tab started.
+// Kicks off a run of the current workflow, or stops the one in flight. It's a
+// Stop button while any run of the workflow is unfinished — including one a
+// collaborator started, or one still going after a reload — and toasts the
+// outcome of the runs this tab started.
 function RunButton({ workflowId }: RunButtonProps) {
   const { getNodes, getEdges } = useReactFlow<StepNodeType>()
-  const [isPending, startTransition] = useTransition()
+  const [isStarting, startStarting] = useTransition()
+  const [isStopping, startStopping] = useTransition()
   // The run just triggered, until the realtime feed picks it up.
   const [triggeredRunId, setTriggeredRunId] = useState<string | null>(null)
+  // The run a stop was requested for, until the realtime feed marks it done.
+  const [stoppedRunId, setStoppedRunId] = useState<string | null>(null)
   // Loaded lazily in the effect: session storage isn't available during SSR.
   const ownRuns = useRef<Set<string> | null>(null)
 
   const runs = useWorkflowRuns()
-  const isRunning =
-    isPending ||
-    runs.some((run) => !run.isCompleted) ||
-    (triggeredRunId !== null && !runs.some((run) => run.id === triggeredRunId))
+  // At most one run is in flight at a time.
+  const activeRunId =
+    runs.find((run) => !run.isFinished)?.id ??
+    (triggeredRunId !== null && !runs.some((run) => run.id === triggeredRunId)
+      ? triggeredRunId
+      : null)
+  const isBusy =
+    isStarting ||
+    isStopping ||
+    (activeRunId !== null && activeRunId === stoppedRunId)
 
   useEffect(() => {
     ownRuns.current ??= loadOwnRuns(workflowId)
     const own = ownRuns.current
 
-    const finished = runs.filter((run) => run.isCompleted && own.has(run.id))
+    const finished = runs.filter((run) => run.isFinished && own.has(run.id))
     if (finished.length === 0) return
 
     for (const run of finished) {
@@ -474,11 +485,36 @@ function RunButton({ workflowId }: RunButtonProps) {
     saveOwnRuns(workflowId, own)
   }, [runs, workflowId])
 
+  if (activeRunId !== null && !isStarting) {
+    return (
+      <Button
+        size="sm"
+        variant="destructive"
+        disabled={isBusy}
+        onClick={() => {
+          startStopping(async () => {
+            const result = await cancelWorkflowAction(activeRunId)
+
+            if (!result.ok) {
+              toast.error(result.error)
+              return
+            }
+
+            setStoppedRunId(activeRunId)
+          })
+        }}
+      >
+        {isBusy ? <Spinner /> : <Square fill="currentColor" />}
+        {isBusy ? "Stopping..." : "Stop"}
+      </Button>
+    )
+  }
+
   return (
     <Button
       size="sm"
       variant="secondary"
-      disabled={isRunning}
+      disabled={isBusy}
       onClick={() => {
         const graph = { nodes: getNodes(), edges: getEdges() }
         const problems = validateGraph(graph)
@@ -488,7 +524,7 @@ function RunButton({ workflowId }: RunButtonProps) {
           return
         }
 
-        startTransition(async () => {
+        startStarting(async () => {
           const result = await runWorkflowAction({ id: workflowId, graph })
 
           if (!result.ok) {
@@ -503,8 +539,8 @@ function RunButton({ workflowId }: RunButtonProps) {
         })
       }}
     >
-      {isRunning ? <Spinner /> : <Play fill="primary" />}
-      {isRunning ? "Running..." : "Run"}
+      {isBusy ? <Spinner /> : <Play fill="primary" />}
+      {isBusy ? "Starting..." : "Run"}
     </Button>
   )
 }

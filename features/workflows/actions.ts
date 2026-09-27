@@ -2,8 +2,9 @@
 
 import { auth } from "@clerk/nextjs/server"
 import * as Sentry from "@sentry/nextjs"
-import { runs, tasks } from "@trigger.dev/sdk"
+import { NotFoundError, runs, tasks } from "@trigger.dev/sdk"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 import { LiveblocksError } from "@liveblocks/node"
 
@@ -27,9 +28,10 @@ import type { WorkflowGraph } from "@/lib/db/schema"
 type ActionResult<T = void> =
   { ok: true; data: T } | { ok: false; error: string }
 
+// On success this redirects to the new workflow, so it only returns on failure.
 export const createWorkflowAction = async (
   name: string
-): Promise<ActionResult<{ id: string }>> => {
+): Promise<ActionResult> => {
   const { orgId } = await auth()
 
   if (!orgId) {
@@ -43,7 +45,7 @@ export const createWorkflowAction = async (
   Sentry.logger.info("Workflow created", { "workflow.id": workflow.id })
 
   revalidatePath("/workflows", "layout")
-  return { ok: true, data: { id: workflow.id } }
+  redirect(`/workflows/${workflow.id}`)
 }
 
 export const deleteWorkflowAction = async (
@@ -144,15 +146,48 @@ export const runWorkflowAction = async ({
   }
 }
 
-export const cancelWorkflowAction = async (runId: string) => {
+export const cancelWorkflowAction = async (
+  runId: string
+): Promise<ActionResult> => {
   const { orgId } = await auth()
-  if (!orgId) throw new Error("No active organization")
+
+  if (!orgId) {
+    return { ok: false, error: "No active organization" }
+  }
 
   Sentry.getIsolationScope().setAttributes({
     "org.id": orgId,
     "run.id": runId,
   })
 
-  await runs.cancel(runId)
-  Sentry.logger.info("Workflow run cancelled")
+  try {
+    // The run id comes from the client, so only cancel a workflow run this org
+    // triggered. Its payload's orgId was set server-side from the session in
+    // runWorkflowAction. A missing run and another org's run get the same
+    // answer, so the response doesn't reveal which run ids exist.
+    const run = await runs
+      .retrieve<typeof runWorkflowTask>(runId)
+      .catch((error: unknown) => {
+        if (error instanceof NotFoundError) return null
+        throw error
+      })
+
+    if (
+      run?.taskIdentifier !== "run-workflow" ||
+      run.payload?.orgId !== orgId
+    ) {
+      Sentry.logger.warn("Workflow run to cancel not found")
+      return { ok: false, error: "Workflow run not found" }
+    }
+
+    await runs.cancel(runId)
+    Sentry.logger.info("Workflow run cancelled")
+    return { ok: true, data: undefined }
+  } catch (error) {
+    Sentry.logger.error("Failed to cancel workflow run", {
+      reason: error instanceof Error ? error.message : String(error),
+    })
+    Sentry.captureException(error)
+    return { ok: false, error: "Failed to stop workflow" }
+  }
 }
