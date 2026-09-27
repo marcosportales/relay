@@ -1,3 +1,5 @@
+import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin"
+import { esbuildPlugin } from "@trigger.dev/build/extensions"
 import { defineConfig } from "@trigger.dev/sdk"
 
 export default defineConfig({
@@ -23,5 +25,16 @@ export default defineConfig({
     // Stagehand resolves its extension zip relative to its own module file, so it
     // must load from node_modules rather than be bundled into the task.
     external: ["@browserbasehq/stagehand"],
+    extensions: [
+      // Upload source maps to Sentry on deploy so task stack traces are readable.
+      esbuildPlugin(
+        sentryEsbuildPlugin({
+          org: "marcoss-organization",
+          project: "relay",
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+        }),
+        { placement: "last", target: "deploy" },
+      ),
+    ],
   },
 })

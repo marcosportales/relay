@@ -27,6 +27,7 @@
     "@liveblocks/react-flow": "^3.24.2",
     "@liveblocks/react-ui": "^3.24.2",
     "@sentry/nextjs": "^11.0.0",
+    "@sentry/node": "^11.0.0",
     "@shadcn/react": "^0.3.1",
     "@trigger.dev/react-hooks": "4.6.4",
     "@trigger.dev/sdk": "4.6.4",
@@ -64,6 +65,7 @@
   },
   "devDependencies": {
     "@next/env": "^16.3.4",
+    "@sentry/esbuild-plugin": "^5.4.0",
     "@tailwindcss/postcss": "^4",
     "@trigger.dev/build": "4.6.4",
     "@types/node": "^20",

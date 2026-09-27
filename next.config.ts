@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
 
 export default withSentryConfig(nextConfig, {
   org: "marcoss-organization",
-  project: "javascript-nextjs",
+  project: "relay",
 
   // Source map upload auth token
   authToken: process.env.SENTRY_AUTH_TOKEN,
