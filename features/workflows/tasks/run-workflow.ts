@@ -5,13 +5,27 @@ import { getWorkflow } from "../data"
 import { interpolate } from "../lib/interpolate"
 import { browserbase, Stagehand } from "@browserbasehq/stagehand"
 import { nodeExecutors } from "../nodes/node-executors"
+import type { StepNodeData } from "../nodes/node-registry"
+
+// The JSON value run metadata accepts; the SDK doesn't export it by name.
+type Json = Parameters<typeof metadata.set>[1]
 
 export type RunStepStatus = "pending" | "running" | "done" | "failed"
 
-export type RunStep = {
+// Travels through run metadata and output, so every field must stay plain JSON.
+export type RunStep = Pick<StepNodeData, "type" | "title"> & {
   id: string
   status: RunStepStatus
+  startedAt?: number // epoch ms, set when the step starts running
+  durationMs?: number // set once the step is done or failed
+  output?: Json
+  error?: string
 }
+
+// Executors return arbitrary values; round-trip them so only plain JSON reaches
+// metadata (class instances, functions and undefined would not survive it anyway).
+const toJson = (value: unknown): Json =>
+  value === undefined ? null : JSON.parse(JSON.stringify(value))
 
 export const runWorkflowTask = task({
   id: "run-workflow",
@@ -52,16 +66,16 @@ export const runWorkflowTask = task({
 
     const outputs: Record<string, unknown> = {}
 
-    let steps: RunStep[] = order
-      .filter((id) => {
-        const type = byId.get(id)?.data.type
-        return type !== undefined && nodeExecutors[type] !== undefined
-      })
-      .map((id) => ({ id, status: "pending" }))
+    let steps: RunStep[] = order.flatMap((id) => {
+      const node = byId.get(id)
+      if (!node || !nodeExecutors[node.data.type]) return []
+      const { type, title } = node.data
+      return [{ id, type, title, status: "pending" }]
+    })
     metadata.set("steps", steps)
 
-    const setStepStatus = (id: string, status: RunStepStatus) => {
-      steps = steps.map((step) => (step.id === id ? { ...step, status } : step))
+    const updateStep = (id: string, patch: Partial<RunStep>) => {
+      steps = steps.map((step) => (step.id === id ? { ...step, ...patch } : step))
       metadata.set("steps", steps)
     }
 
@@ -76,7 +90,8 @@ export const runWorkflowTask = task({
         const executor = nodeExecutors[node.data.type]
         if (!executor) continue
 
-        setStepStatus(id, "running")
+        const startedAt = Date.now()
+        updateStep(id, { status: "running", startedAt })
         // Push "running" now, or a fast step's "done" overwrites it before the
         // periodic flush and the canvas never sees it.
         await metadata.flush()
@@ -90,14 +105,22 @@ export const runWorkflowTask = task({
           )
           outputs[id] = await executor({ values, getStagehand })
         } catch (error) {
-          setStepStatus(id, "failed")
+          updateStep(id, {
+            status: "failed",
+            durationMs: Date.now() - startedAt,
+            error: error instanceof Error ? error.message : String(error),
+          })
           // A thrown run returns no output, so the flushed metadata is the only
           // way the failed state reaches the canvas.
           await metadata.flush()
           throw error
         }
 
-        setStepStatus(id, "done")
+        updateStep(id, {
+          status: "done",
+          durationMs: Date.now() - startedAt,
+          output: toJson(outputs[id]),
+        })
       }
     } finally {
       await stagehand?.close()

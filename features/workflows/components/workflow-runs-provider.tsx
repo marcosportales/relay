@@ -8,9 +8,23 @@ import type {
   runWorkflowTask,
 } from "@/features/workflows/tasks/run-workflow"
 
-type WorkflowRun = ReturnType<
+type RealtimeWorkflowRun = ReturnType<
   typeof useRealtimeRunsWithTag<typeof runWorkflowTask>
 >["runs"][number]
+
+// A realtime run plus its steps resolved from output or live metadata.
+export type WorkflowRun = RealtimeWorkflowRun & {
+  steps: RunStep[]
+  isLive: boolean
+}
+
+// A run's steps: the final output once it completes, otherwise the live
+// metadata (a failed run throws and has no output, so metadata is all it has).
+function getRunSteps(run: RealtimeWorkflowRun): RunStep[] {
+  if (run.output?.steps) return run.output.steps
+  const metadataSteps = run.metadata?.steps
+  return Array.isArray(metadataSteps) ? (metadataSteps as RunStep[]) : []
+}
 
 const WorkflowRunsContext = createContext<WorkflowRun[] | null>(null)
 
@@ -30,32 +44,35 @@ export function WorkflowRunsProvider({
     { accessToken, skipColumns: ["payload"] }
   )
 
+  // Newest first.
+  const workflowRuns = useMemo(
+    () =>
+      runs
+        .map((run) => ({
+          ...run,
+          steps: getRunSteps(run),
+          isLive: run.status === "QUEUED" || run.status === "EXECUTING",
+        }))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    [runs]
+  )
+
   return (
-    <WorkflowRunsContext.Provider value={runs}>
+    <WorkflowRunsContext.Provider value={workflowRuns}>
       {children}
     </WorkflowRunsContext.Provider>
   )
 }
 
-export function useLatestRunSteps() {
+export function useWorkflowRuns() {
   const ctx = useContext(WorkflowRunsContext)
   if (!ctx)
-    throw new Error("useLatestRunSteps must be used within WorkflowRunsProvider")
+    throw new Error("useWorkflowRuns must be used within WorkflowRunsProvider")
+  return ctx
+}
 
-  return useMemo(() => {
-    const latest = ctx.reduce<WorkflowRun | undefined>(
-      (newest, run) =>
-        !newest || run.createdAt > newest.createdAt ? run : newest,
-      undefined
-    )
-    if (!latest) return { steps: [] as RunStep[], isLive: false }
-
-    const metadataSteps = latest.metadata?.steps
-    const steps =
-      latest.output?.steps ??
-      (Array.isArray(metadataSteps) ? (metadataSteps as RunStep[]) : [])
-    const isLive = latest.status === "QUEUED" || latest.status === "EXECUTING"
-
-    return { steps, isLive }
-  }, [ctx])
+export function useLatestRunSteps() {
+  const runs = useWorkflowRuns()
+  const latest = runs[0]
+  return { steps: latest?.steps ?? [], isLive: latest?.isLive ?? false }
 }
