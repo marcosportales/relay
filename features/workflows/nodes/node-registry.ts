@@ -2,6 +2,7 @@ import type { Node } from "@xyflow/react"
 import {
   Bot,
   Globe,
+  Mail,
   MousePointerClick,
   ScanSearch,
   ScanText,
@@ -146,6 +147,35 @@ export const nodeRegistry = {
       { path: "url", label: "URL" },
       { path: "actions", label: "Actions" },
     ],
+  },
+  "send-email": {
+    type: "send-email",
+    kind: "action",
+    label: "Send Email",
+    icon: Mail,
+    accent: "bg-teal-500 text-white",
+    fields: [
+      {
+        key: "to",
+        label: "To",
+        placeholder: "delivered@resend.dev",
+        required: true,
+      },
+      {
+        key: "subject",
+        label: "Subject",
+        placeholder: "Your workflow finished",
+        required: true,
+      },
+      {
+        key: "body",
+        label: "Body",
+        placeholder: "Here is what the workflow found...",
+        multiline: true,
+        required: true,
+      },
+    ],
+    outputs: [{ path: "id", label: "Email ID" }],
   },
 } satisfies Record<string, NodeDefinition>
 
