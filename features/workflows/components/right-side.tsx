@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { MoreHorizontal, Play, Trash2 } from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
@@ -39,6 +39,10 @@ import {
   type StepNodeKind,
   type StepNodeType,
 } from "@/features/workflows/nodes/node-registry"
+import {
+  useUpstreamConnections,
+  type UpstreamConnection,
+} from "@/features/workflows/hooks/use-upstream-connections"
 import { validateGraph } from "../lib/validate-graph"
 
 // This file builds up to the RightSidebar component exported at the bottom: a
@@ -92,19 +96,25 @@ function Section({
 // Editor tab — edits the fields of the selected node.
 // ---------------------------------------------------------------------------
 
+type FieldElement = HTMLInputElement | HTMLTextAreaElement
+
 interface FieldProps {
   field: NodeField
   value: string
   onChange: (value: string) => void
+  onFocus: () => void
+  ref: (el: FieldElement | null) => void
 }
 
 // A single editor field for a node property: a textarea when the field is
 // multiline, otherwise a single-line input.
-function Field({ field, value, onChange }: FieldProps) {
+function Field({ field, value, onChange, onFocus, ref }: FieldProps) {
   const props = {
     id: field.key,
     value,
     placeholder: field.placeholder,
+    onFocus,
+    ref,
   }
 
   if (field.multiline) {
@@ -120,9 +130,48 @@ function Field({ field, value, onChange }: FieldProps) {
   return <Input {...props} onChange={(e) => onChange(e.target.value)} />
 }
 
+interface ConnectionChipsProps {
+  connections: UpstreamConnection[]
+  onInsert: (token: string) => void
+}
+
+// Outputs of upstream nodes; clicking one inserts its {{ }} token into a field.
+function ConnectionChips({ connections, onInsert }: ConnectionChipsProps) {
+  return (
+    <div className="mt-1 flex flex-col gap-2 border-t border-dashed border-border pt-4">
+      <p className="text-xs font-medium">Connections</p>
+      <div className="flex flex-wrap gap-1.5">
+        {connections.map((connection) => (
+          <Button
+            key={connection.token}
+            variant="outline"
+            size="sm"
+            title={connection.token}
+            className="gap-1.5 rounded-md pr-2 pl-1.5 text-xs font-normal"
+            // Keep focus (and the caret) in the field being edited.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onInsert(connection.token)}
+          >
+            <NodeIcon
+              type={connection.nodeType}
+              className="size-4.5 rounded-sm [&_svg]:size-3"
+            />
+            {connection.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // The Editor tab: one input per field on the selected node, or an empty state.
 function Inspector({ node }: { node: StepNodeType | undefined }) {
   const { updateNodeData } = useReactFlow<StepNodeType>()
+  const connections = useUpstreamConnections(node?.id)
+  // The field last focused, and each field's element, so a chip click can
+  // insert at the caret. Reset per node via the `key` on <Inspector>.
+  const [activeKey, setActiveKey] = useState<string>()
+  const fieldRefs = useRef<Record<string, FieldElement | null>>({})
 
   if (!node) {
     return (
@@ -134,6 +183,33 @@ function Inspector({ node }: { node: StepNodeType | undefined }) {
 
   const { type, title, values } = node.data
   const def: NodeDefinition = nodeRegistry[type]
+
+  const insertToken = (token: string) => {
+    const field = def.fields.find((f) => f.key === activeKey) ?? def.fields[0]
+    if (!field) return
+
+    // Replace the selection in the last-edited field; append to an untouched one.
+    const el = fieldRefs.current[field.key]
+    const value = values[field.key] ?? ""
+    const touched = field.key === activeKey
+    const start = touched ? (el?.selectionStart ?? value.length) : value.length
+    const end = touched ? (el?.selectionEnd ?? value.length) : value.length
+
+    updateNodeData(node.id, {
+      values: {
+        ...values,
+        [field.key]: value.slice(0, start) + token + value.slice(end),
+      },
+    })
+    setActiveKey(field.key)
+
+    // Wait for the new value to render, then put the caret after the token.
+    requestAnimationFrame(() => {
+      const caret = start + token.length
+      el?.focus()
+      el?.setSelectionRange(caret, caret)
+    })
+  }
 
   return (
     <Section title={title} icon={<NodeIcon type={type} />}>
@@ -155,9 +231,16 @@ function Inspector({ node }: { node: StepNodeType | undefined }) {
                     values: { ...values, [field.key]: value },
                   })
                 }}
+                onFocus={() => setActiveKey(field.key)}
+                ref={(el) => {
+                  fieldRefs.current[field.key] = el
+                }}
               />
             </div>
           ))
+        )}
+        {def.fields.length > 0 && connections.length > 0 && (
+          <ConnectionChips connections={connections} onInsert={insertToken} />
         )}
       </div>
     </Section>
@@ -404,7 +487,7 @@ export function RightSide({ workflowId }: RightSideProps) {
           <Palette />
         </TabsContent>
         <TabsContent value="editor" className="flex min-h-0 flex-col">
-          <Inspector node={selected} />
+          <Inspector key={selected?.id} node={selected} />
         </TabsContent>
       </Tabs>
     </ResizablePanel>

@@ -2,6 +2,7 @@ import toposort from "toposort"
 import { logger, task } from "@trigger.dev/sdk"
 
 import { getWorkflow } from "../data"
+import { interpolate } from "../lib/interpolate"
 import { browserbase, Stagehand } from "@browserbasehq/stagehand"
 import { nodeExecutors } from "../nodes/node-executors"
 
@@ -42,6 +43,8 @@ export const runWorkflowTask = task({
       return stagehand
     }
 
+    const outputs: Record<string, unknown> = {}
+
     try {
       for (const id of order) {
         const node = byId.get(id)
@@ -52,7 +55,13 @@ export const runWorkflowTask = task({
         logger.log(`Running step: ${node.data.title}`)
         const executor = nodeExecutors[node.data.type]
         if (!executor) continue
-        await executor({ values: node.data.values, getStagehand })
+        const values = Object.fromEntries(
+          Object.entries(node.data.values).map(([key, value]) => [
+            key,
+            interpolate(value, outputs),
+          ])
+        )
+        outputs[id] = await executor({ values, getStagehand })
       }
     } finally {
       await stagehand?.close()
