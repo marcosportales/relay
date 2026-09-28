@@ -5,6 +5,8 @@ nodes onto a canvas, wire them together, and run the workflow. Each run happens
 in a cloud browser, and you can watch the steps update live, check each step's
 output, and replay a recording of the browser session.
 
+![Two users editing the same workflow in real time, in light and dark mode](docs/workflow-editor-multiplayer.png)
+
 - **Canvas editor.** Built on React Flow, with real-time collaboration
   (cursors, presence, shared graph) through Liveblocks.
 - **AI browser steps.** Stagehand v4 `act`, `extract` and `observe` run on a
@@ -161,6 +163,7 @@ lib/
   liveblocks.ts             Liveblocks node client
   resend.ts                 Resend client
 design/                     UI reference screenshots
+docs/                       README images
 drizzle/                    Generated SQL migrations
 proxy.ts                    Clerk middleware (Next.js 16 "proxy")
 trigger.config.ts           Trigger.dev config
