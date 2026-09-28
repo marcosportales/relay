@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, MoreHorizontal, Play, Square, Trash2 } from "lucide-react"
+import {
+  Lock,
+  LogOut,
+  MoreHorizontal,
+  Play,
+  Square,
+  Trash2,
+} from "lucide-react"
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react"
 import * as Sentry from "@sentry/nextjs"
 import { toast } from "sonner"
@@ -18,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -376,6 +384,14 @@ function ActionsMenu({ workflowId }: ActionsMenuProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-48">
+        <DropdownMenuItem
+          className="text-xs [&_svg:not([class*='size-'])]:size-3.5"
+          onSelect={() => router.push("/")}
+        >
+          <LogOut />
+          Exit workflow
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
           className="text-xs [&_svg:not([class*='size-'])]:size-3.5"
